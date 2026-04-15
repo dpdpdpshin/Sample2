@@ -1,0 +1,146 @@
+<script>
+  let imgA = null, imgB = null;
+
+  function setLayout(mode) {
+    const grid = document.getElementById('mainGrid');
+    document.querySelectorAll('.layout-btn').forEach(b => b.classList.remove('active'));
+    if (mode === 'vertical') {
+      grid.style.gridTemplateColumns = '1fr';
+      document.querySelectorAll('.layout-btn')[1].classList.add('active');
+    } else {
+      grid.style.gridTemplateColumns = '1fr 1fr';
+      document.querySelectorAll('.layout-btn')[0].classList.add('active');
+    }
+  }
+
+  function handleDrag(e, side) {
+    e.preventDefault();
+    document.getElementById('drop' + side).classList.add('dragover');
+  }
+
+  function handleDragLeave(side) {
+    document.getElementById('drop' + side).classList.remove('dragover');
+  }
+
+  function handleDrop(e, side) {
+    e.preventDefault();
+    handleDragLeave(side);
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) loadFromFile(file, side);
+  }
+
+  function loadFile(e, side) {
+    const file = e.target.files[0];
+    if (file) loadFromFile(file, side);
+  }
+
+  function loadFromFile(file, side) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      if (side === 'A') imgA = dataUrl;
+      else imgB = dataUrl;
+      showPreview(side, dataUrl);
+      checkReady();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function showPreview(side, src) {
+    const drop = document.getElementById('drop' + side);
+    drop.innerHTML = `
+      <div class="preview-wrap">
+        <img src="${src}">
+        <button class="remove-btn" onclick="removeImg('${side}')">✕ 제거</button>
+      </div>
+    `;
+    drop.style.padding = '0';
+    drop.style.minHeight = 'unset';
+  }
+
+  function removeImg(side) {
+    if (side === 'A') imgA = null;
+    else imgB = null;
+    location.reload();
+  }
+
+  function checkReady() {
+    const btn = document.getElementById('runBtn');
+    btn.disabled = !(imgA && imgB);
+  }
+
+  // 🔥 핵심: ChatGPT 연결 UX
+  function runAI() {
+    const body = document.getElementById('aiBody');
+
+    const prompt = `당신은 의류/패션 발주 검수 전문가입니다.
+
+두 이미지를 비교하여 아래 JSON 형식으로만 답변하세요.
+
+{
+  "items": [
+    {
+      "status": "ok|warn|error|info",
+      "title": "항목명",
+      "detail": "상세 설명"
+    }
+  ],
+  "summary": "전체 검수 결과"
+}`;
+
+    body.innerHTML = `
+      <div style="font-size:13px;line-height:1.6;color:#aaa">
+        <b>사용 방법</b><br><br>
+
+        1️⃣ ChatGPT 열기<br>
+        2️⃣ 이미지 2개 업로드<br>
+        3️⃣ 아래 프롬프트 붙여넣기<br><br>
+
+        <textarea id="promptBox" style="width:100%;height:120px;background:#111;color:#fff;border:1px solid #333;padding:10px;">${prompt}</textarea>
+
+        <br><br>
+        4️⃣ 결과 JSON을 아래에 붙여넣기<br>
+
+        <textarea id="jsonInput" style="width:100%;height:120px;"></textarea>
+
+        <br><br>
+        <button onclick="applyManual()" style="padding:8px 16px;background:#e8ff47;border:none;border-radius:6px;font-weight:700;cursor:pointer">
+          결과 적용
+        </button>
+      </div>
+    `;
+  }
+
+  function applyManual() {
+    try {
+      const txt = document.getElementById('jsonInput').value;
+      const parsed = JSON.parse(txt);
+      renderResult(parsed);
+    } catch (e) {
+      alert("JSON 형식 오류");
+    }
+  }
+
+  function renderResult(data) {
+    const body = document.getElementById('aiBody');
+    const icons = { ok: '✓', warn: '⚠', error: '✕', info: 'ℹ' };
+
+    let html = '<div class="result-list">';
+    let counts = { ok: 0, warn: 0, error: 0 };
+
+    for (const item of data.items) {
+      if (counts[item.status] !== undefined) counts[item.status]++;
+      html += `
+        <div class="result-item ${item.status}">
+          <div class="result-icon">${icons[item.status]}</div>
+          <div>
+            <strong>${item.title}</strong><br>
+            <span>${item.detail}</span>
+          </div>
+        </div>`;
+    }
+
+    html += '</div>';
+    body.innerHTML = html;
+  }
+</script>
